@@ -181,6 +181,26 @@ PlasmoidItem {
         property real bigDigitW: { bigMetrics.font; return maxDigitWidth(bigMetrics); }
         property real secDigitW: { secMetrics.font; return maxDigitWidth(secMetrics); }
 
+        // In the panel the size comes from the visible glyphs, not the line
+        // box, so the digits (and the date) fill the panel height. Every measure is taken at 100 px and scales linearly.
+        FontMetrics { id: hourMetrics; font.family: hora.font.family; font.weight: Font.Bold; font.pixelSize: 100 }
+        readonly property rect digitBox100: { hourMetrics.font; return hourMetrics.tightBoundingRect("0123456789"); }
+        readonly property rect dateBox100: { dateMetrics.font; return dateMetrics.tightBoundingRect(dateText.text); }
+        // space left above and below the clock for each size; the large one
+        // is negative because it grows into the padding Plasma leaves around
+        // the applet
+        readonly property real panelMargin: Kirigami.Units.smallSpacing * [1.5, 0.75, -0.5][cfg.panelSize]
+        readonly property real dateGap: dateShown ? hora.font.pixelSize * 0.06 : 0
+        readonly property real panelPixelSize: {
+            hourMetrics.font;
+            const rowW100 = 4 * maxDigitWidth(hourMetrics) + hourMetrics.advanceWidth(":");
+            const dateK = dateShown ? rowW100 / dateMetrics.advanceWidth(dateText.text) * dateBox100.height / 100 : 0;
+            const gapK = dateShown ? 0.06 : 0;
+            return 100 * (height - panelMargin * 2) / (digitBox100.height + 100 * (gapK + dateK));
+        }
+        // distance from the top of a Text item to the top of its glyphs
+        function glyphTop(fm, box, pixelSize) { return (fm.ascent + box.y) * pixelSize / 100; }
+
         MouseArea {
             anchors.fill: parent
             onClicked: root.expanded = !root.expanded
@@ -191,9 +211,9 @@ PlasmoidItem {
             id: timeContainer
             width: mainContainer.width
             height: childrenRect.height
-            anchors.centerIn: parent
-            anchors.verticalCenterOffset: inPanel && mainContainer.dateShown
-                                          ? -(dateText.height + dateText.anchors.topMargin) / 2 : 0
+            y: mainContainer.panelMargin - mainContainer.glyphTop(hourMetrics, mainContainer.digitBox100,
+                                                                  hora.font.pixelSize)
+            anchors.centerIn: inPanel ? undefined : parent
 
             Row {
                 id: timeRow
@@ -210,7 +230,7 @@ PlasmoidItem {
                         return String(h === 0 ? 12 : h);
                     }
                     width: mainContainer.bigDigitW * 2
-                    font.pixelSize: inPanel ? mainContainer.height * (mainContainer.dateShown ? 0.5 : 0.75)
+                    font.pixelSize: inPanel ? mainContainer.panelPixelSize
                                             : Math.min(mainContainer.width, mainContainer.height) * 0.36
                     font.family: cfg.fontFamily || metro.name
                     font.weight: Font.Bold
@@ -252,7 +272,10 @@ PlasmoidItem {
                 color: cfg.secondsColor
                 anchors.left: timeRow.right
                 anchors.top: timeRow.top
-                anchors.topMargin: inPanel ? 0 : -5
+                // in the panel, line its digits up with the top of the hour
+                anchors.topMargin: inPanel ? mainContainer.glyphTop(hourMetrics, mainContainer.digitBox100,
+                                                                    hora.font.pixelSize * 0.6)
+                                           : -5
             }
         }
 
@@ -271,8 +294,10 @@ PlasmoidItem {
             color: cfg.dateColor
             anchors.horizontalCenter: timeContainer.horizontalCenter
             anchors.horizontalCenterOffset: -segundos.width / 2
-            anchors.top: timeContainer.bottom
-            anchors.topMargin: inPanel ? -hora.font.pixelSize * 0.08 : 2
+            y: mainContainer.panelMargin + mainContainer.digitBox100.height * hora.font.pixelSize / 100
+               + mainContainer.dateGap - mainContainer.glyphTop(dateMetrics, mainContainer.dateBox100, font.pixelSize)
+            anchors.top: inPanel ? undefined : timeContainer.bottom
+            anchors.topMargin: 2
         }
     }
 }

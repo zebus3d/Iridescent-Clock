@@ -9,6 +9,7 @@ KCM.SimpleKCM {
     id: page
 
     property string cfg_fontFamily
+    property int cfg_panelSize
     property alias cfg_hourColorTop: hourTop.color
     property alias cfg_hourColorBottom: hourBottom.color
     property alias cfg_separatorColor: separator.color
@@ -25,6 +26,13 @@ KCM.SimpleKCM {
             model: [i18n("Metropolis Black (default)"), ...families]
             currentIndex: page.cfg_fontFamily === "" ? 0 : families.indexOf(page.cfg_fontFamily) + 1
             onActivated: page.cfg_fontFamily = currentIndex === 0 ? "" : families[currentIndex - 1]
+        }
+
+        QQC2.ComboBox {
+            Kirigami.FormData.label: i18n("Size in the panel:")
+            model: [i18n("Compact"), i18n("Medium"), i18n("Large")]
+            currentIndex: page.cfg_panelSize
+            onActivated: page.cfg_panelSize = currentIndex
         }
 
         Item { Kirigami.FormData.isSection: true }

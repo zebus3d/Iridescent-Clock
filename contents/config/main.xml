@@ -38,6 +38,10 @@
     <entry name="fontFamily" type="String">
       <default></default>
     </entry>
+    <!-- size in the panel: 0 = compact, 1 = medium, 2 = large -->
+    <entry name="panelSize" type="Int">
+      <default>1</default>
+    </entry>
     <entry name="hourColorTop" type="Color">
       <default>#78C3FB</default>
     </entry>
