@@ -7,7 +7,8 @@ import QtQuick.Layouts 1.12
 import Qt5Compat.GraphicalEffects
 import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
-import org.kde.plasma.plasma5support as Plasma5Support
+import org.kde.kirigami as Kirigami
+import org.kde.plasma.workspace.calendar as PlasmaCalendar
 
 PlasmoidItem {
     id: root
@@ -15,9 +16,11 @@ PlasmoidItem {
     property string codeleng: ((Qt.locale().name)[0]+(Qt.locale().name)[1])
     property bool formato12Hour: plasmoid.configuration.hourFormat
     property bool visibleTxt: Plasmoid.configuration.activeText
+    property bool inPanel: Plasmoid.formFactor === PlasmaCore.Types.Horizontal
+                           || Plasmoid.formFactor === PlasmaCore.Types.Vertical
 
-    preferredRepresentation: fullRepresentation
-    Plasmoid.backgroundHints: PlasmaCore.Types.ConfigurableBackground
+    preferredRepresentation: compactRepresentation
+    Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
 
     function desktoptext(languageCode) {
         const translations = {
@@ -39,6 +42,14 @@ PlasmoidItem {
         return translations[languageCode] || translations["en"];
     }
 
+    // Metropolis is not monospaced: give each two-digit group the width of the
+    // widest digit so the clock (and the panel) doesn't shift every second.
+    function maxDigitWidth(fm) {
+        let w = 0;
+        for (let i = 0; i < 10; i++) w = Math.max(w, fm.advanceWidth(String(i)));
+        return w;
+    }
+
     FontLoader {
         id: milk
         source: "../fonts/Milkshake.ttf"
@@ -48,41 +59,51 @@ PlasmoidItem {
         source: "../fonts/Metropolis-Black.ttf"
     }
 
-    fullRepresentation: Item {
-        id: mainContainer
-        width: plasmoid.width
-        height: plasmoid.height
-        
-        // Main rectangle with glow - this is now the only box
-        Rectangle {
-            id: base
-            width: parent.width * 0.95
-            height: parent.height * 0.85
-            radius: height/10
-            color: "#00001B"  // Dark purple-blue interior
-            anchors.centerIn: parent
-            
-            // Purple glow border effect
-            layer.enabled: true
-            layer.effect: Glow {
-                radius: 15
-                samples: 24
-                color: "#9747c7"  // Purple glow color from screenshot
-                spread: 0.2
+    // Click on the clock opens the Plasma calendar
+    fullRepresentation: PlasmaCalendar.MonthView {
+        id: calendar
+        Layout.minimumWidth: Kirigami.Units.gridUnit * 20
+        Layout.minimumHeight: Kirigami.Units.gridUnit * 20
+        borderOpacity: 0.25
+        today: new Date()
+
+        Connections {
+            target: root
+            function onExpandedChanged() {
+                if (root.expanded) {
+                    calendar.today = new Date();
+                    calendar.resetToToday();
+                }
             }
         }
+    }
+
+    compactRepresentation: Item {
+        id: mainContainer
+        Layout.preferredWidth: inPanel ? timeRow.width + segundos.width + Kirigami.Units.smallSpacing * 2
+                                       : Kirigami.Units.gridUnit * 20
+        Layout.minimumWidth: inPanel ? Layout.preferredWidth : -1
+        Layout.preferredHeight: Kirigami.Units.gridUnit * 10
+
+        FontMetrics { id: bigMetrics; font: hora.font }
+        FontMetrics { id: secMetrics; font: segundos.font }
+        FontMetrics { id: dateMetrics; font.family: dateText.font.family; font.pixelSize: 100 }
+        property real bigDigitW: { bigMetrics.font; return maxDigitWidth(bigMetrics); }
+        property real secDigitW: { secMetrics.font; return maxDigitWidth(secMetrics); }
         
         // Time display (16:20)
         Item {
             id: timeContainer
-            width: base.width
+            width: mainContainer.width
             height: childrenRect.height
-            anchors.centerIn: base
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: inPanel ? -(dateText.height + dateText.anchors.topMargin) / 2 : 0
             
             Row {
                 id: timeRow
                 spacing: 0
                 anchors.horizontalCenter: parent.horizontalCenter
+                anchors.horizontalCenterOffset: -segundos.width / 2
                 anchors.left: undefined
                 anchors.right: undefined
                 
@@ -97,7 +118,10 @@ PlasmoidItem {
                     ? String(currentDate.getHours())
                     : String(currentDate.getHours() - 12)))
                     : Qt.formatDateTime(currentDate, "HH")
-                    font.pixelSize: Math.min(mainContainer.width, mainContainer.height) * 0.36
+                    width: mainContainer.bigDigitW * 2
+                    horizontalAlignment: Text.AlignHCenter
+                    font.pixelSize: inPanel ? mainContainer.height * 0.5
+                                             : Math.min(mainContainer.width, mainContainer.height) * 0.36
                     font.family: metro.name
                     font.weight: Font.Bold
                     
@@ -127,6 +151,8 @@ PlasmoidItem {
                     id: minutos
                     property var currentDate: hora.currentDate
                     text: Qt.formatDateTime(currentDate, "mm")
+                    width: mainContainer.bigDigitW * 2
+                    horizontalAlignment: Text.AlignHCenter
                     font.pixelSize: hora.font.pixelSize
                     font.family: hora.font.family
                     font.weight: Font.Bold
@@ -149,29 +175,38 @@ PlasmoidItem {
                 id: segundos
                 property var currentDate: hora.currentDate
                 text: Qt.formatDateTime(currentDate, "ss")
+                width: mainContainer.secDigitW * 2
                 font.pixelSize: hora.font.pixelSize * 0.4
                 font.family: hora.font.family
                 font.weight: Font.Bold
                 color: "#4DD8C8"  // Teal
                 anchors.left: timeRow.right
                 anchors.top: timeRow.top
-                anchors.topMargin: -5
+                anchors.topMargin: inPanel ? 0 : -5
             }
         }
         
         // Date display centered below time
         Text {
             id: dateText
-            width: base.width
+            width: mainContainer.width
             horizontalAlignment: Text.AlignHCenter
             property var currentDate: hora.currentDate
-            text: Qt.formatDateTime(currentDate, "MMM, dddd d")
-            font.pixelSize: Math.min(mainContainer.width, mainContainer.height) * 0.08
+            text: Qt.formatDateTime(currentDate, inPanel ? "dd/MM/yy" : "MMM, dddd d")
+            // in the panel, scale it so it spans the same width as the hour
+            font.pixelSize: inPanel ? 100 * timeRow.width / dateMetrics.advanceWidth(text)
+                                    : Math.min(mainContainer.width, mainContainer.height) * 0.08
             font.family: hora.font.family
             color: "#CC73E1"  // Light purple
             anchors.horizontalCenter: timeContainer.horizontalCenter
+            anchors.horizontalCenterOffset: -segundos.width / 2
             anchors.top: timeContainer.bottom
-            anchors.topMargin: 2
+            anchors.topMargin: inPanel ? -hora.font.pixelSize * 0.08 : 2
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.expanded = !root.expanded
         }
 
         Timer {

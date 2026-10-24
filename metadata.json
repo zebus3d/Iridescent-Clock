@@ -1,4 +1,5 @@
 {
+    "KPackageStructure": "Plasma/Applet",
     "KPlugin": {
         "Authors": [
             {
@@ -13,9 +14,6 @@
         "Icon": "clock",
         "EnabledByDefault": true,
         "License": "GPL-3.0+",
-        "ServiceTypes": [
-            "Plasma/Applet"
-        ],
         "Version": "2.9",
         "Website": "https://store.kde.org/p/2136299/"
     },

@@ -18,12 +18,12 @@ Item {
     }
 
     ColumnLayout {
-        spacing: units.smallSpacing * 2
+        spacing: 12
 
         GridLayout{
             columns: 2
             Label {
-                Layout.minimumWidth: root.width/2
+                Layout.minimumWidth: configRoot.width/2
                 text: i18n("Opacity:")
                 horizontalAlignment: Text.AlignRight
             }
@@ -37,7 +37,7 @@ Item {
                 // suffix: " " + i18nc("pixels","px.")
             }
             Label {
-                Layout.minimumWidth: root.width/2
+                Layout.minimumWidth: configRoot.width/2
                 horizontalAlignment: Label.AlignRight
                 text: i18n("Color:")
             }
@@ -57,14 +57,14 @@ Item {
                 }
             }
             Label {
-                Layout.minimumWidth: root.width/2
+                Layout.minimumWidth: configRoot.width/2
             }
             CheckBox {
                 id: horsFormat
                 text: i18n("12 Hour Format")
             }
             Label {
-                Layout.minimumWidth: root.width/2
+                Layout.minimumWidth: configRoot.width/2
             }
             CheckBox {
                 id: activeText
