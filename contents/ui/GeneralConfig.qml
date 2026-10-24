@@ -1,76 +1,46 @@
 import QtQuick
-import Qt.labs.platform
-import QtQuick.Controls
-import QtQuick.Layouts 1.11
+import QtQuick.Controls as QQC2
+import org.kde.kirigami as Kirigami
+import org.kde.kcmutils as KCM
 
-Item {
-    id: configRoot
+KCM.SimpleKCM {
+    id: page
 
-    signal configurationChanged
+    property bool cfg_hourFormat
+    property alias cfg_showSeconds: showSeconds.checked
+    property alias cfg_showDate: showDate.checked
+    property string cfg_dateFormat
 
-    property alias cfg_opacity: porcetageOpacity.value
-    property alias cfg_customColor: colorDialog.color
-    property alias cfg_hourFormat: horsFormat.checked
-    property alias cfg_activeText: activeText.checked
+    readonly property var dateFormats: ["dd/MM/yy", "dd/MM/yyyy", "yyyy-MM-dd", "d MMM", "ddd d", "MMM, dddd d"]
 
-    ColorDialog {
-        id: colorDialog
-    }
-
-    ColumnLayout {
-        spacing: 12
-
-        GridLayout{
-            columns: 2
-            Label {
-                Layout.minimumWidth: configRoot.width/2
-                text: i18n("Opacity:")
-                horizontalAlignment: Text.AlignRight
-            }
-
-            SpinBox{
-                id: porcetageOpacity
-
-                from: 30
-                to: 100
-                stepSize: 10
-                // suffix: " " + i18nc("pixels","px.")
-            }
-            Label {
-                Layout.minimumWidth: configRoot.width/2
-                horizontalAlignment: Label.AlignRight
-                text: i18n("Color:")
-            }
-            Rectangle {
-                id: colorhex
-                color: colorDialog.color
-                border.color: "#B3FFFFFF"
-                border.width: 1
-                width: 64
-                radius: 4
-                height: 24
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: {
-                        colorDialog.open()
-                    }
-                }
-            }
-            Label {
-                Layout.minimumWidth: configRoot.width/2
-            }
-            CheckBox {
-                id: horsFormat
-                text: i18n("12 Hour Format")
-            }
-            Label {
-                Layout.minimumWidth: configRoot.width/2
-            }
-            CheckBox {
-                id: activeText
-                text: i18n("Active Text:")
-            }
+    Kirigami.FormLayout {
+        QQC2.ComboBox {
+            Kirigami.FormData.label: i18n("Time format:")
+            model: [i18n("24 hour"), i18n("12 hour")]
+            currentIndex: page.cfg_hourFormat ? 1 : 0
+            onActivated: page.cfg_hourFormat = currentIndex === 1
         }
-}
 
+        QQC2.CheckBox {
+            id: showSeconds
+            text: i18n("Show seconds")
+        }
+
+        Item { Kirigami.FormData.isSection: true }
+
+        QQC2.CheckBox {
+            id: showDate
+            Kirigami.FormData.label: i18n("Date:")
+            text: i18n("Show date")
+        }
+
+        QQC2.ComboBox {
+            Kirigami.FormData.label: i18n("Date format:")
+            enabled: showDate.checked
+            // show each format applied to today's date
+            model: page.dateFormats.map(f => Qt.formatDate(new Date(), f))
+            currentIndex: Math.max(0, page.dateFormats.indexOf(page.cfg_dateFormat))
+            onActivated: page.cfg_dateFormat = page.dateFormats[currentIndex]
+        }
+    }
 }

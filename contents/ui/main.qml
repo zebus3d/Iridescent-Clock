@@ -2,44 +2,60 @@
     SPDX-FileCopyrightText: zayronxio
     SPDX-License-Identifier: GPL-3.0-or-later
 */
-import QtQuick 2.12
-import QtQuick.Layouts 1.12
+import QtQuick
+import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
 import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.kirigami as Kirigami
+import org.kde.plasma.plasma5support as Plasma5Support
 import org.kde.plasma.workspace.calendar as PlasmaCalendar
 
 PlasmoidItem {
     id: root
 
-    property string codeleng: ((Qt.locale().name)[0]+(Qt.locale().name)[1])
-    property bool formato12Hour: plasmoid.configuration.hourFormat
-    property bool visibleTxt: Plasmoid.configuration.activeText
+    readonly property var cfg: Plasmoid.configuration
     property bool inPanel: Plasmoid.formFactor === PlasmaCore.Types.Horizontal
                            || Plasmoid.formFactor === PlasmaCore.Types.Vertical
+
+    // "Local" is the time engine's source for the system time zone
+    readonly property string timeZoneSource: cfg.timeZone || "Local"
+    property date now: new Date()
 
     preferredRepresentation: compactRepresentation
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
 
-    function desktoptext(languageCode) {
-        const translations = {
-            "es": "son las",         // Spanish
-            "en": "it is",           // English
-            "hi": "यह",              // Hindi
-            "fr": "il est",          // French
-            "de": "es ist",          // German
-            "it": "sono le",         // Italian
-            "pt": "são",             // Portuguese
-            "ru": "сейчас",          // Russian
-            "zh": "现在是",           // Chinese (Mandarin)
-            "ja": "今",              // Japanese
-            "ko": "지금은",           // Korean
-            "nl": "het is"           // Dutch
-        };
+    toolTipMainText: timeZoneSource === "Local"
+                     ? Qt.formatDate(now, Qt.locale().dateFormat(Locale.LongFormat))
+                     : timeZoneSource.split("/").pop().replace(/_/g, " ")
+    toolTipSubText: timeZoneSource === "Local"
+                    ? ""
+                    : Qt.formatDate(now, Qt.locale().dateFormat(Locale.LongFormat))
 
-        // Return the translation for the language code or default to English if not found
-        return translations[languageCode] || translations["en"];
+    Plasma5Support.DataSource {
+        id: timeSource
+        engine: "time"
+        connectedSources: [root.timeZoneSource]
+        interval: 60000
+    }
+
+    // JS dates are always in the system zone: shift by the difference between
+    // the chosen zone's UTC offset and ours to get its wall-clock time.
+    function currentTime() {
+        const date = new Date();
+        const data = timeSource.data[timeZoneSource];
+        if (timeZoneSource === "Local" || !data || data["Offset"] === undefined)
+            return date;
+        const localOffset = -date.getTimezoneOffset() * 60;
+        return new Date(date.getTime() + (data["Offset"] - localOffset) * 1000);
+    }
+
+    Timer {
+        interval: 1000
+        running: true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: root.now = root.currentTime()
     }
 
     // Metropolis is not monospaced: give each two-digit group the width of the
@@ -50,10 +66,34 @@ PlasmoidItem {
         return w;
     }
 
-    FontLoader {
-        id: milk
-        source: "../fonts/Milkshake.ttf"
+    // Text painted with a vertical gradient. The text itself stays hidden and is
+    // only used as the gradient's mask, so a new value is redrawn cleanly.
+    component GradientText: Item {
+        id: gradientText
+        property alias text: label.text
+        property alias font: label.font
+        property color topColor
+        property color bottomColor
+        implicitHeight: label.implicitHeight
+
+        Text {
+            id: label
+            anchors.fill: parent
+            horizontalAlignment: Text.AlignHCenter
+            visible: false
+        }
+        LinearGradient {
+            anchors.fill: label
+            source: label
+            start: Qt.point(0, 0)
+            end: Qt.point(0, height)
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: gradientText.topColor }
+                GradientStop { position: 1.0; color: gradientText.bottomColor }
+            }
+        }
     }
+
     FontLoader {
         id: metro
         source: "../fonts/Metropolis-Black.ttf"
@@ -65,21 +105,21 @@ PlasmoidItem {
         Layout.minimumWidth: Kirigami.Units.gridUnit * 20
         Layout.minimumHeight: Kirigami.Units.gridUnit * 20
         borderOpacity: 0.25
-        today: new Date()
+        today: root.now
 
         Connections {
             target: root
             function onExpandedChanged() {
-                if (root.expanded) {
-                    calendar.today = new Date();
-                    calendar.resetToToday();
-                }
+                if (root.expanded) calendar.resetToToday();
             }
         }
     }
 
     compactRepresentation: Item {
         id: mainContainer
+
+        readonly property bool dateShown: cfg.showDate
+
         Layout.preferredWidth: inPanel ? timeRow.width + segundos.width + Kirigami.Units.smallSpacing * 2
                                        : Kirigami.Units.gridUnit * 20
         Layout.minimumWidth: inPanel ? Layout.preferredWidth : -1
@@ -90,135 +130,98 @@ PlasmoidItem {
         FontMetrics { id: dateMetrics; font.family: dateText.font.family; font.pixelSize: 100 }
         property real bigDigitW: { bigMetrics.font; return maxDigitWidth(bigMetrics); }
         property real secDigitW: { secMetrics.font; return maxDigitWidth(secMetrics); }
-        
-        // Time display (16:20)
-        Item {
-            id: timeContainer
-            width: mainContainer.width
-            height: childrenRect.height
-            anchors.centerIn: parent
-            anchors.verticalCenterOffset: inPanel ? -(dateText.height + dateText.anchors.topMargin) / 2 : 0
-            
-            Row {
-                id: timeRow
-                spacing: 0
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.horizontalCenterOffset: -segundos.width / 2
-                anchors.left: undefined
-                anchors.right: undefined
-                
-                // Hours with blue gradient
-                Text {
-                    id: hora
-                    property var currentDate: new Date()
-                    text: formato12Hour
-                    ? (currentDate.getHours() === 0
-                    ? "12"
-                    : (currentDate.getHours() <= 12
-                    ? String(currentDate.getHours())
-                    : String(currentDate.getHours() - 12)))
-                    : Qt.formatDateTime(currentDate, "HH")
-                    width: mainContainer.bigDigitW * 2
-                    horizontalAlignment: Text.AlignHCenter
-                    font.pixelSize: inPanel ? mainContainer.height * 0.5
-                                             : Math.min(mainContainer.width, mainContainer.height) * 0.36
-                    font.family: metro.name
-                    font.weight: Font.Bold
-                    
-                    LinearGradient {
-                        anchors.fill: parent
-                        source: parent
-                        start: Qt.point(0, 0)
-                        end: Qt.point(0, parent.height)
-                        gradient: Gradient {
-                            GradientStop { position: 0.0; color: "#78C3FB" }  // Light blue
-                            GradientStop { position: 1.0; color: "#3A66F9" }  // Darker blue
-                        }
-                    }
-                }
-                
-                // Colon separator
-                Text {
-                    text: ":"
-                    font.pixelSize: hora.font.pixelSize
-                    font.family: hora.font.family
-                    font.weight: Font.Bold
-                    color: "#DDDDDD"
-                }
-                
-                // Minutes with orange-pink gradient
-                Text {
-                    id: minutos
-                    property var currentDate: hora.currentDate
-                    text: Qt.formatDateTime(currentDate, "mm")
-                    width: mainContainer.bigDigitW * 2
-                    horizontalAlignment: Text.AlignHCenter
-                    font.pixelSize: hora.font.pixelSize
-                    font.family: hora.font.family
-                    font.weight: Font.Bold
-                    
-                    LinearGradient {
-                        anchors.fill: parent
-                        source: parent
-                        start: Qt.point(0, 0)
-                        end: Qt.point(0, parent.height)
-                        gradient: Gradient {
-                            GradientStop { position: 0.0; color: "#F9A55A" }  // Orange
-                            GradientStop { position: 1.0; color: "#F25576" }  // Pink
-                        }
-                    }
-                }
-            }
-            
-            // Seconds as superscript
-            Text {
-                id: segundos
-                property var currentDate: hora.currentDate
-                text: Qt.formatDateTime(currentDate, "ss")
-                width: mainContainer.secDigitW * 2
-                font.pixelSize: hora.font.pixelSize * 0.4
-                font.family: hora.font.family
-                font.weight: Font.Bold
-                color: "#4DD8C8"  // Teal
-                anchors.left: timeRow.right
-                anchors.top: timeRow.top
-                anchors.topMargin: inPanel ? 0 : -5
-            }
-        }
-        
-        // Date display centered below time
-        Text {
-            id: dateText
-            width: mainContainer.width
-            horizontalAlignment: Text.AlignHCenter
-            property var currentDate: hora.currentDate
-            text: Qt.formatDateTime(currentDate, inPanel ? "dd/MM/yy" : "MMM, dddd d")
-            // in the panel, scale it so it spans the same width as the hour
-            font.pixelSize: inPanel ? 100 * timeRow.width / dateMetrics.advanceWidth(text)
-                                    : Math.min(mainContainer.width, mainContainer.height) * 0.08
-            font.family: hora.font.family
-            color: "#CC73E1"  // Light purple
-            anchors.horizontalCenter: timeContainer.horizontalCenter
-            anchors.horizontalCenterOffset: -segundos.width / 2
-            anchors.top: timeContainer.bottom
-            anchors.topMargin: inPanel ? -hora.font.pixelSize * 0.08 : 2
-        }
 
         MouseArea {
             anchors.fill: parent
             onClicked: root.expanded = !root.expanded
         }
 
-        Timer {
-            interval: 1000
-            running: true
-            repeat: true
-            onTriggered: {
-                hora.currentDate = new Date()
-                minutos.currentDate = hora.currentDate
-                segundos.currentDate = hora.currentDate
-                dateText.currentDate = hora.currentDate
+        // Time display (16:20)
+        Item {
+            id: timeContainer
+            width: mainContainer.width
+            height: childrenRect.height
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: inPanel && mainContainer.dateShown
+                                          ? -(dateText.height + dateText.anchors.topMargin) / 2 : 0
+
+            Row {
+                id: timeRow
+                spacing: 0
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.horizontalCenterOffset: -segundos.width / 2
+
+                // Hours with blue gradient
+                GradientText {
+                    id: hora
+                    text: {
+                        if (!cfg.hourFormat) return Qt.formatDateTime(root.now, "HH");
+                        const h = root.now.getHours() % 12;
+                        return String(h === 0 ? 12 : h);
+                    }
+                    width: mainContainer.bigDigitW * 2
+                    font.pixelSize: inPanel ? mainContainer.height * (mainContainer.dateShown ? 0.5 : 0.75)
+                                            : Math.min(mainContainer.width, mainContainer.height) * 0.36
+                    font.family: cfg.fontFamily || metro.name
+                    font.weight: Font.Bold
+                    topColor: cfg.hourColorTop
+                    bottomColor: cfg.hourColorBottom
+                }
+
+                // Colon separator
+                Text {
+                    text: ":"
+                    font.pixelSize: hora.font.pixelSize
+                    font.family: hora.font.family
+                    font.weight: Font.Bold
+                    color: cfg.separatorColor
+                }
+
+                // Minutes with orange-pink gradient
+                GradientText {
+                    id: minutos
+                    text: Qt.formatDateTime(root.now, "mm")
+                    width: mainContainer.bigDigitW * 2
+                    font.pixelSize: hora.font.pixelSize
+                    font.family: hora.font.family
+                    font.weight: Font.Bold
+                    topColor: cfg.minuteColorTop
+                    bottomColor: cfg.minuteColorBottom
+                }
             }
+
+            // Seconds as superscript
+            Text {
+                id: segundos
+                visible: cfg.showSeconds
+                text: Qt.formatDateTime(root.now, "ss")
+                width: visible ? mainContainer.secDigitW * 2 : 0
+                font.pixelSize: hora.font.pixelSize * 0.4
+                font.family: hora.font.family
+                font.weight: Font.Bold
+                color: cfg.secondsColor
+                anchors.left: timeRow.right
+                anchors.top: timeRow.top
+                anchors.topMargin: inPanel ? 0 : -5
+            }
+        }
+
+        // Date display centered below time
+        Text {
+            id: dateText
+            visible: mainContainer.dateShown
+            width: mainContainer.width
+            horizontalAlignment: Text.AlignHCenter
+            text: Qt.formatDate(root.now, cfg.dateFormat)
+            // in the panel, scale it so it spans the same width as the hour
+            font.pixelSize: inPanel ? 100 * timeRow.width / dateMetrics.advanceWidth(text)
+                                    : Math.min(mainContainer.width, mainContainer.height) * 0.08
+            font.family: hora.font.family
+            color: cfg.dateColor
+            anchors.horizontalCenter: timeContainer.horizontalCenter
+            anchors.horizontalCenterOffset: -segundos.width / 2
+            anchors.top: timeContainer.bottom
+            anchors.topMargin: inPanel ? -hora.font.pixelSize * 0.08 : 2
         }
     }
 }

@@ -6,17 +6,50 @@
   <kcfgfile name=""/>
 
   <group name="General">
-	<entry name="opacity" type="Int">
-		<default>100</default>
-	</entry>
-    <entry name="customColor" type="string">
-      <default>#ffffff</default>
-      </entry>
-      <entry name="hourFormat" type="bool">
-        <default>false</default>
-      </entry>
-      <entry name="activeText" type="bool">
-        <default>false</default>
-      </entry>
+    <!-- true = 12 hour clock, false = 24 hour clock -->
+    <entry name="hourFormat" type="Bool">
+      <default>false</default>
+    </entry>
+    <entry name="showSeconds" type="Bool">
+      <default>true</default>
+    </entry>
+    <entry name="showDate" type="Bool">
+      <default>true</default>
+    </entry>
+    <entry name="dateFormat" type="String">
+      <default>dd/MM/yy</default>
+    </entry>
+    <!-- IANA id such as "America/New_York"; empty = system time zone -->
+    <entry name="timeZone" type="String">
+      <default></default>
+    </entry>
+  </group>
+
+  <group name="Appearance">
+    <!-- empty = the bundled Metropolis Black -->
+    <entry name="fontFamily" type="String">
+      <default></default>
+    </entry>
+    <entry name="hourColorTop" type="Color">
+      <default>#78C3FB</default>
+    </entry>
+    <entry name="hourColorBottom" type="Color">
+      <default>#3A66F9</default>
+    </entry>
+    <entry name="separatorColor" type="Color">
+      <default>#DDDDDD</default>
+    </entry>
+    <entry name="minuteColorTop" type="Color">
+      <default>#F9A55A</default>
+    </entry>
+    <entry name="minuteColorBottom" type="Color">
+      <default>#F25576</default>
+    </entry>
+    <entry name="secondsColor" type="Color">
+      <default>#4DD8C8</default>
+    </entry>
+    <entry name="dateColor" type="Color">
+      <default>#CC73E1</default>
+    </entry>
   </group>
 </kcfg>
