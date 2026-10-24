@@ -26,11 +26,11 @@ PlasmoidItem {
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
 
     toolTipMainText: timeZoneSource === "Local"
-                     ? Qt.formatDate(now, Qt.locale().dateFormat(Locale.LongFormat))
+                     ? now.toLocaleDateString(Qt.locale(), Locale.LongFormat)
                      : timeZoneSource.split("/").pop().replace(/_/g, " ")
     toolTipSubText: timeZoneSource === "Local"
                     ? ""
-                    : Qt.formatDate(now, Qt.locale().dateFormat(Locale.LongFormat))
+                    : now.toLocaleDateString(Qt.locale(), Locale.LongFormat)
 
     Plasma5Support.DataSource {
         id: timeSource
@@ -99,18 +99,68 @@ PlasmoidItem {
         source: "../fonts/Metropolis-Black.ttf"
     }
 
-    // Click on the clock opens the Plasma calendar
-    fullRepresentation: PlasmaCalendar.MonthView {
-        id: calendar
+    // Click on the clock opens the Plasma calendar, with the holidays of the
+    // selected day listed below it
+    fullRepresentation: ColumnLayout {
         Layout.minimumWidth: Kirigami.Units.gridUnit * 20
         Layout.minimumHeight: Kirigami.Units.gridUnit * 20
-        borderOpacity: 0.25
-        today: root.now
+        spacing: Kirigami.Units.smallSpacing
 
-        Connections {
-            target: root
-            function onExpandedChanged() {
-                if (root.expanded) calendar.resetToToday();
+        // the holidays plugin reads its regions from Plasma's shared config
+        PlasmaCalendar.EventPluginsManager {
+            id: eventPlugins
+            enabledPlugins: cfg.showHolidays ? ["holidaysevents"] : []
+        }
+
+        PlasmaCalendar.MonthView {
+            id: calendar
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            borderOpacity: 0.25
+            today: root.now
+            eventPluginsManager: eventPlugins
+            firstDayOfWeek: cfg.firstDayOfWeek > -1 ? cfg.firstDayOfWeek : Qt.locale().firstDayOfWeek
+
+            property var dayEvents: []
+            function updateDayEvents() {
+                dayEvents = cfg.showHolidays ? daysModel.eventsForDate(currentDate) : [];
+            }
+            onCurrentDateChanged: updateDayEvents()
+
+            Connections {
+                target: calendar.daysModel
+                function onAgendaUpdated(updatedDate) { calendar.updateDayEvents(); }
+            }
+            Connections {
+                target: root
+                function onExpandedChanged() {
+                    if (root.expanded) calendar.resetToToday();
+                }
+            }
+        }
+
+        Repeater {
+            model: calendar.dayEvents
+            delegate: RowLayout {
+                required property var modelData
+                Layout.fillWidth: true
+                Layout.leftMargin: Kirigami.Units.largeSpacing
+                Layout.rightMargin: Kirigami.Units.largeSpacing
+                spacing: Kirigami.Units.smallSpacing
+
+                Rectangle {
+                    implicitWidth: Kirigami.Units.smallSpacing * 2
+                    implicitHeight: implicitWidth
+                    radius: width / 2
+                    color: modelData.eventColor || Kirigami.Theme.highlightColor
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: modelData.title
+                    color: Kirigami.Theme.textColor
+                    opacity: modelData.isMinor ? 0.7 : 1
+                    elide: Text.ElideRight
+                }
             }
         }
     }
@@ -212,7 +262,8 @@ PlasmoidItem {
             visible: mainContainer.dateShown
             width: mainContainer.width
             horizontalAlignment: Text.AlignHCenter
-            text: Qt.formatDate(root.now, cfg.dateFormat)
+            // Qt.formatDate() would use English day/month names
+            text: root.now.toLocaleDateString(Qt.locale(), cfg.dateFormat)
             // in the panel, scale it so it spans the same width as the hour
             font.pixelSize: inPanel ? 100 * timeRow.width / dateMetrics.advanceWidth(text)
                                     : Math.min(mainContainer.width, mainContainer.height) * 0.08

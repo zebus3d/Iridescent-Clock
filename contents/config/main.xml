@@ -23,6 +23,14 @@
     <entry name="timeZone" type="String">
       <default></default>
     </entry>
+    <!-- 0 = Sunday ... 6 = Saturday; -1 = from the system locale -->
+    <entry name="firstDayOfWeek" type="Int">
+      <default>-1</default>
+    </entry>
+    <!-- the regions are shared with Plasma's Digital Clock -->
+    <entry name="showHolidays" type="Bool">
+      <default>true</default>
+    </entry>
   </group>
 
   <group name="Appearance">

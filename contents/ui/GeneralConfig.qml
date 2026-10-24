@@ -10,6 +10,8 @@ KCM.SimpleKCM {
     property alias cfg_showSeconds: showSeconds.checked
     property alias cfg_showDate: showDate.checked
     property string cfg_dateFormat
+    property int cfg_firstDayOfWeek
+    property alias cfg_showHolidays: showHolidays.checked
 
     readonly property var dateFormats: ["dd/MM/yy", "dd/MM/yyyy", "yyyy-MM-dd", "d MMM", "ddd d", "MMM, dddd d"]
 
@@ -38,9 +40,27 @@ KCM.SimpleKCM {
             Kirigami.FormData.label: i18n("Date format:")
             enabled: showDate.checked
             // show each format applied to today's date
-            model: page.dateFormats.map(f => Qt.formatDate(new Date(), f))
+            model: page.dateFormats.map(f => new Date().toLocaleDateString(Qt.locale(), f))
             currentIndex: Math.max(0, page.dateFormats.indexOf(page.cfg_dateFormat))
             onActivated: page.cfg_dateFormat = page.dateFormats[currentIndex]
+        }
+
+        Item { Kirigami.FormData.isSection: true }
+
+        QQC2.ComboBox {
+            Kirigami.FormData.label: i18n("First day of week:")
+            // index 0 follows the system locale, then Sunday (0) ... Saturday (6)
+            model: [i18n("Use region defaults")].concat([0, 1, 2, 3, 4, 5, 6].map(d => {
+                const name = Qt.locale().standaloneDayName(d, Locale.LongFormat);
+                return name.charAt(0).toUpperCase() + name.slice(1);
+            }))
+            currentIndex: page.cfg_firstDayOfWeek + 1
+            onActivated: page.cfg_firstDayOfWeek = currentIndex - 1
+        }
+
+        QQC2.CheckBox {
+            id: showHolidays
+            text: i18n("Show holidays in the calendar")
         }
     }
 }
